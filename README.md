@@ -10,6 +10,15 @@ However, it became to me obvious that, because this chip has been heavily used, 
 I thus publish this source code in the hope that other people will find it useful to repair and reprogram these existing chips, instead of just throwing them away because one can't find the utilities to reprogram them anymore.
 This can give these chips a new life, and it is also positive for the planet.
 
+# Disclaimer
+
+This software is provided "AS IS", without warranty of any kind, express of implied.
+
+It is published in the hope that it can help others to program compatible microcontrollers that they own, but you do so at your own risk.
+Also, I can only highly recommend that you first attempt to perform a `dump` of you chip's flash as a first step before any other (and more dangerous...) operation (like `program`).
+
+More details about the license can be found [here](./LICENSE).
+
 # Generic flasher tools
 
 This directory contains script-only (python3), portable flasher utilities.
