@@ -34,10 +34,10 @@ This setup is required before flashing an ST10 chip.
 Prepare a python virtual environment to run multiflasher scripts:
 ```
 cd /path/to/topdir/multiflasher-python/
-FLASHER_CLI_TOPDIR=`pwd`
+export FLASHER_TOPDIR="$(pwd)"
 python3 -m venv venv
-source "$FLASHER_CLI_TOPDIR/venv/bin/activate"
-"$FLASHER_CLI_TOPDIR"/venv/bin/pip3 install -r "$FLASHER_CLI_TOPDIR"//requirements.txt
+source "$FLASHER_TOPDIR/venv/bin/activate"
+"$FLASHER_TOPDIR"/venv/bin/pip3 install -r "$FLASHER_TOPDIR"/requirements.txt
 ```
 
 > **Note**  
@@ -78,13 +78,13 @@ To run the ST10 flashing script, execute the python script `st10_flasher.py`, pr
 
 * First, make sure you have [setup the environment](#setting-up-the-environment-for-the-python-scripts) to execute the programming python scripts.
 
-* Switch the ST10 MCU to boostrap mode.
+* Switch the ST10 MCU to boostrap mode
 
 * Point the script to the required STARTCHIPID and ST10_MONITOR hex files via environment variables and start (for example), a dump of the firmware:
 ```
 ST10_STARTCHIPID="/path/to/startchipid.hex \
 ST10_MONITOR="/path/to/Monitor004b.hex \
-python3 "$FLASHER_CLI_TOPDIR"/st10_flasher.py dump /dev/ttyUSB1 /path/to/output/file.hex
+python3 "$FLASHER_TOPDIR"/st10_flasher.py dump /dev/ttyUSB1 /path/to/output/file.hex
 ```
 
 In order to program a firmware image, use `program` instead of `dump` in the command above.
@@ -115,11 +115,11 @@ To run the PIC18F flashing script, execute the python script `pic18_flasher.py`,
 
 * First, make sure you have [setup the environment](#setting-up-the-environment-for-the-python-scripts) to execute the programming python scripts.
 
-* Switch the PIC MCU to picboot mode.
+* Switch the PIC MCU to picboot mode
 
 * Start (for example), a dump of the firmware:
 ```
-python3 "$FLASHER_CLI_TOPDIR"/pic18f_flasher.py dump /dev/ttyUSB0 /path/to/output/file.hex)
+python3 "$FLASHER_TOPDIR"/pic18f_flasher.py dump /dev/ttyUSB0 /path/to/output/file.hex)
 ```
 
 In order to program a firmware image, use `program` instead of `dump` in the command above.
