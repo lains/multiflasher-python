@@ -119,7 +119,7 @@ To run the PIC18F flashing script, execute the python script `pic18_flasher.py`,
 
 * Start (for example), a dump of the firmware:
 ```
-python3 "$FLASHER_TOPDIR"/pic18f_flasher.py dump /dev/ttyUSB0 /path/to/output/file.hex)
+python3 "$FLASHER_TOPDIR"/pic18f_flasher.py dump /dev/ttyUSB0 /path/to/output/file.hex
 ```
 
 In order to program a firmware image, use `program` instead of `dump` in the command above.
