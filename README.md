@@ -84,7 +84,7 @@ To run the ST10 flashing script, execute the python script `st10_flasher.py`, pr
 ```
 ST10_STARTCHIPID="/path/to/startchipid.hex \
 ST10_MONITOR="/path/to/Monitor004b.hex \
-python3 "$FLASHER_CLI_TOPDIR/st10_flasher.py dump /dev/ttyUSB1 /path/to/output/file.hex
+python3 "$FLASHER_CLI_TOPDIR"/st10_flasher.py dump /dev/ttyUSB1 /path/to/output/file.hex
 ```
 
 In order to program a firmware image, use `program` instead of `dump` in the command above.
