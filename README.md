@@ -97,7 +97,7 @@ Once the PIC is switched to picboot mode, this python script will verify that it
 
 The rest of the code is targetted to flash manipulation (reading/erasing/writing).
 
-> ** Warning**  
+> **Warning**  
 > Please note that the whole python code is customized for the specific PIC18F6622 chip (especially CHIP ID detection and flash partitionning definition), but adapting it to other variants should be quite easy.
 
 To run the PIC18F flashing script, execute the python script `pic18_flasher.py`, providing the serial port and the firmware to program on the command line.
