@@ -1,0 +1,2 @@
+[run]
+omit = *_test.py, domain/mock_*.py, adapters/mock_*.py, domain/ext_adapters_interface/*.py
