@@ -17,7 +17,7 @@ class ST10F276FlashBlocksCatalog(FlashBlocksCatalog):
         # Source for the flash blocks layout can be found in the ST10F276 datasheet (UM0404) in Table 3. 512 Kbyte IFlash memory block organization
         # Warning: defined blocks below should NOT overlap or unexpected behaviour will occur
         # Also, the index (order) or flash blocks is important as they should match with the bit number in the bitmap used for the flash erase command's argument
-        # For example, a flash erase using a mask 0x0010 has bit 5 set, it is thus expected that it will erase block at index 5 in the list below
+        # For example, a flash erase using a mask 0x0010 has the 5th bit set, it is thus expected that it will erase the 5th block (B0F4) in the list below
         # Note: in address ranges below, the first address is the first byte of the flash block, and is included
         #       The second address is the byte AFTER the last byte of the flash block (it is thus excluded)
         if ROMS1_set:
