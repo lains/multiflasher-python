@@ -125,7 +125,7 @@ from domain.mcu_addressing import MCULocatedLogicalDataChunk
 r = fb.get_flash_block_at_index(4)
 s = r.start_address # s=0x018000 here
 # Write 512 time the byte 0x00
-m.execute(comm.CommandDataSend(chunk_to_send=MCULocatedLogicalDataChunk(r.start_address, b'00'*512)))
+m.execute(comm.CommandDataSend(chunk_to_send=MCULocatedLogicalDataChunk(r.start_address, b'\x00'*512)))
 # Read the flash again
 m.execute(comm.CommandDataReceiveBytes(MCULogicalAddressRange(r.start_address, r.start_address+512)))
 ```
