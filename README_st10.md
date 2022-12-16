@@ -43,3 +43,89 @@ python3 "$FLASHER_TOPDIR"/st10_flasher.py dump /dev/ttyUSB1 /path/to/output/file
 ```
 
 In order to program a firmware image, use `program` instead of `dump` in the command above.
+
+## Using the library in interactive mode
+
+Because the execution of individual commands to the MCU is also available as Python methods, the ST10 Monitor can be manipulated via a Python interpreter.
+
+In this example, I use IPython.
+
+First, we will need to import external libraries:
+```
+from serial import Serial
+import struct
+import domain.st10.monitor_comm as comm
+from domain.mcu_addressing import MCULogicalAddressRange
+from domain.st10.st10f276 import ST10F276FlashBlocksCatalog
+from intelhex import IntelHex
+```
+
+> **Note**  
+> Importing from IntelHex is only useful if you are going to read of write hex files.
+
+
+Now, put your ST10 in boostrap mode and make it upload and execute the Monitor embedded software in RAM:
+```
+p = Serial('/dev/ttyUSB1', 115200)
+def accept_chip_id(chip_id):
+     print("CHIP ID: " + str(chip_id))
+     return True
+
+startchipid_hex_filename='/path/to/startchipid.hex'
+monitor_hex_filename='/path/to/Monitor004b.hex'
+comm.MonitorRemoteLauncher(device=p, startchipid_hex_filename=startchipid_hex_filename, monitor_hex_filename=monitor_hex_filename, validate_chip_id=accept_chip_id).start()
+```
+
+The above command should succeed, and output the value of the ST10 chip ID (in its decimal format)
+If you get a BSLProbError `Could not probe ST10 to check it is in BSL mode`, the ST10 is probably not in BSL (bootstrap) mode or it is not properly connected to the serial link.
+
+We should now get a handle on the monitor protocol session before we can run Monitor commands:
+
+```
+m=comm.MonitorProtocolSession(device=p).get_handler()
+```
+
+Here are a few sample commands we can use (please make sure you know what you are doing when executing these commands):
+
+## Reading the EMUCON register content
+
+```
+emucon_reg = struct.unpack('<H', m.execute(comm.CommandDataReceive16BitWords(MCULogicalAddressRange(0x00fe0a, 0x00fe0c)))[0:2])[0]
+```
+
+## Erasing the whole flash
+```
+m.execute(comm.CommandFlashErase(flash_mask=0xffff))
+```
+
+> **Note**  
+> The flash is now fully erases, it only contains 0xff bytes
+
+## Reading the first 512 bytes of the flash
+
+```
+from domain.command_preprocessor import CommandPreprocessor
+m.execute(comm.CommandDataReceiveBytes(MCULogicalAddressRange(0, 16)))
+```
+
+## Reading B0F0
+
+```
+# Create an object of type ST10F276FlashBlocksCatalog, this allows us to have access to the ST10F276 flash organization.
+fb = ST10F276FlashBlocksCatalog(ROMS1_set=False, cmd_preprocessor=CommandPreprocessor())
+# Get the details of the flash block that contains address 0
+r = fb.get_flash_block_at_index(fb.get_block_index_for_address(0))
+m.execute(comm.CommandDataReceiveBytes(r))
+```
+
+## Writing 512 bytes at the 0x018000 (block B0F4 on ST10F276)
+
+```
+from domain.mcu_addressing import MCULocatedLogicalDataChunk
+r = fb.get_flash_block_at_index(4)
+s = r.start_address # s=0x018000 here
+# Write 512 time the byte 0x00
+m.execute(comm.CommandDataSend(chunk_to_send=MCULocatedLogicalDataChunk(r.start_address, b'00'*512)))
+# Read the flash again
+m.execute(comm.CommandDataReceiveBytes(MCULogicalAddressRange(r.start_address, r.start_address+512)))
+```
