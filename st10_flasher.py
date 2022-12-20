@@ -33,15 +33,36 @@ from adapters.progressbar_silent import SilentProgressBarFactory
 
 logger = None
 
-def get_args(_, command, serial_port, firmware_image_filename):
+def get_args(command, serial_port, firmware_image_filename):
     """@brief Extract command-line arguments
     @note Simplistic built-in version without external dependencies
     """
     return (command, serial_port, firmware_image_filename)
 
 if __name__ == "__main__":
+    minimal_flash_erase = False
+    debug = False
+    debug_libs = False
+    argv=sys.argv
+    if len(argv) < 4:  # arg count + 1 for programe
+        print("Not enough arguments", file=sys.stderr)
+        print(__doc__, file=sys.stderr) # Output usage
+        exit(1)
+    progname = argv.pop(0)
+    while len(argv) > 3:
+        option = argv.pop(0)
+        if option == '-f':
+            minimal_flash_erase = True
+        elif option == '-d':
+            if not debug:
+                debug = True
+            else:
+                debug_libs = True
+        else:
+            print(f"Unknown leading option: '{option}'", file=sys.stderr)
+            exit(1)
     try:
-        (command, st10_comm_device, st10_firmware_filename) = get_args(*sys.argv)
+        (command, st10_comm_device, st10_firmware_filename) = get_args(*argv)
         try:
             startchipid_hex_filename = os.environ['ST10_STARTCHIPID']
         except KeyError:
@@ -58,7 +79,7 @@ if __name__ == "__main__":
     except TypeError:
         print(__doc__, file=sys.stderr) # Output usage
         exit(1)
-    logger = create_main_logger(name="st10_flasher", log_level=INFO, also_log_libs=False)
+    logger = create_main_logger(name="st10_flasher", log_level=(DEBUG if debug else INFO), also_log_libs=debug_libs)
     if command != "program" and command != "verify" and command != "dump":
         logger.error("Unsupported command '" + command + "'")
         raise NotImplementedError
@@ -109,7 +130,7 @@ if __name__ == "__main__":
             # Also, Monitor comm requires some preprocessing on ranges provided as input. This preprocessing is made available via get_command_preprocessor()
             st10f276_flash_blocks = ST10F276FlashBlocksCatalog(ROMS1_set=False, cmd_preprocessor=comm.get_command_preprocessor())
             if command == "program":
-                ftools.st10_program_cmd(context=flasher_ctx, target_flash_blocks=st10f276_flash_blocks)
+                ftools.st10_program_cmd(context=flasher_ctx, target_flash_blocks=st10f276_flash_blocks, full_erase=(not minimal_flash_erase))
             elif command == "verify":
                 if not ftools.st10_verify_cmd(context=flasher_ctx, target_flash_blocks=st10f276_flash_blocks):
                     logger.error("Firmware mismatch")

@@ -50,17 +50,3 @@ Instructions are available in [the dedicated readme](./README_st10.md).
 ## PIC18F flasher tool
 
 Instructions are available in [the dedicated readme](./README_pic18f.md).
-
-## Debugging scripts
-
-In order to debug the multiflasher scripts, update the logger line in the corresponding python script.
-
-Configuration *without* debug:
-```
-logger = create_main_logger(name="flasher", log_level=INFO, also_log_libs=False)
-```
-
-Configuration *with* debug:
-```
-logger = create_main_logger(name="flasher", log_level=DEBUG, also_log_libs=True)
-```

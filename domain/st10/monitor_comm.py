@@ -290,10 +290,10 @@ class CommandFlashErase(MonitorCommand):
 
     def __init__(self, flash_mask: int=0xffff, **kwargs):
         """@brief Constructor
-        @param flash_mask The flashing mask (should always be 0xffff?)
+        @param flash_mask The flashing mask (each bit corresponds maps to a flash block)
         """
         if flash_mask < 0x0000 or flash_mask > 0xffff:
-            raise CommandArgumentError("Invalid flash_mask")
+            raise CommandArgumentError(f"Invalid flash_mask: 0x{flash_mask:x}")
         self.flash_mask = flash_mask
         super().__init__(command_id = self.COMMAND_ID, **kwargs)
 

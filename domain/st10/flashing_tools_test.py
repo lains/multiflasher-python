@@ -62,6 +62,19 @@ class EmulatedFlash:
                 else:
                     raise IndexError(f'Outside of flash space: {write_addr:06x}/{self.flash_size:06x}')
 
+def assert_buffer_is_erased_flash(buf: bytearray):
+    for idx, b in enumerate(buf):
+        if b != 0xff:
+            pytest.fail(f'Non empty flash at index {idx}: found byte 0x{b:02x}')
+
+def test_get_flash_block_indexes_for_range():
+    valid_addr_ranges_list = test_flashblockscatalog.get_flash_addr_ranges()
+    for valid_addr_range in valid_addr_ranges_list:
+        block_indexes = test_flashblockscatalog.get_flash_block_indexes_for_range(valid_addr_range)
+        for block_index in block_indexes:
+            assert block_index >= 0 and block_index <=15    # Only these bit values fit into a 16-bit
+    assert valid_addr_ranges_list == test_flashblockscatalog.get_flash_addr_ranges()    # Make sure calling get_flash_addr_ranges() does not modify its internal data
+
 def test_flash_writer_with_0_retries():
     sample_address = 0x2000
     sample_content = b'0123456789abcdef'
@@ -346,7 +359,7 @@ def test_flash_reader_with_2_retries():
     assert retry_test_context.total_tries_number == 3
     assert test_firmware.get_data_chunk_for_range(MCULogicalAddressRange(start_address=sample_address, end_address=sample_address+sample_len)).get_content() == sample_content[0:sample_len]
 
-def test_st10_program_cmd_happy_pass():
+def test_st10_program_cmd_happy_pass_full_erase():
     class TestContext:
         def __init__(self):
             self.step = 0
@@ -381,20 +394,71 @@ def test_st10_program_cmd_happy_pass():
                                   target_command_executor=fake_command_handler)
     
     # When a program operation is invoked
+
     flashing_tools.st10_program_cmd(context=test_context, target_flash_blocks=test_flashblockscatalog)
 
     # Then, the flash should match what we have prepared in the firmware file image
     empty_bytes_in_segments = test_flash.read_data_at(MCULogicalAddressRange(start_address=0x020000, end_address=0x030000))
-    assert empty_bytes_in_segments == b'\xff' * 0x10000
+    assert len(empty_bytes_in_segments) == 0x10000
+    assert_buffer_is_erased_flash(empty_bytes_in_segments)
     assert test_flash.read_data_at(MCULogicalAddressRange(start_address=0x030000, end_address=0x030000+len(content)*16)) == content*16
     trailing_empty_bytes_in_segments = test_flash.read_data_at(MCULogicalAddressRange(start_address=0x030000+len(content)*16, end_address=0x040000))
-    assert trailing_empty_bytes_in_segments == b'\xff' * len(trailing_empty_bytes_in_segments)
+    assert_buffer_is_erased_flash(trailing_empty_bytes_in_segments)
     assert test_flash.read_data_at(MCULogicalAddressRange(start_address=0x040000, end_address=0x040000+len(content))) == content
     trailing_empty_bytes_in_segments = test_flash.read_data_at(MCULogicalAddressRange(start_address=0x040000+len(content), end_address=0x050000))
-    assert trailing_empty_bytes_in_segments == b'\xff' * len(trailing_empty_bytes_in_segments)
+    assert_buffer_is_erased_flash(trailing_empty_bytes_in_segments)
     assert test_flash.read_data_at(MCULogicalAddressRange(start_address=0x050000, end_address=0x050000+len(content)*32)) == content*32
     trailing_empty_bytes_in_segments = test_flash.read_data_at(MCULogicalAddressRange(start_address=0x050000+len(content*32), end_address=0x060000))
-    assert trailing_empty_bytes_in_segments == b'\xff' * len(trailing_empty_bytes_in_segments)
+    assert_buffer_is_erased_flash(trailing_empty_bytes_in_segments)
+
+def test_st10_program_cmd_happy_pass_partial_erase():
+    class TestContext:
+        def __init__(self):
+            self.step = 0
+            self.erase_started = False
+            self.write_started = False
+
+    test_flash = EmulatedFlash(flash_size=0x060000)
+    test_step = TestContext()
+
+    def fake_command_handler(command: monitor_comm.MonitorCommand):
+        if command.COMMAND_ID == monitor_comm.CommandFlashErase.COMMAND_ID:
+            assert not test_step.write_started  # First steps is flash erase (write not started yet)
+            test_step.erase_started = True
+            for bit in range(0, 16):
+                if command.flash_mask & (1<<bit):
+                    flash_block_index = bit
+                    flash_block_range: MCULogicalAddressRange = test_flashblockscatalog.get_flash_block_at_index(flash_block_index)
+                    test_flash.erase_at(flash_block_range)
+        elif command.COMMAND_ID == monitor_comm.CommandDataSend.COMMAND_ID:
+            assert test_step.erase_started   # Write should only occur after erase
+            test_step.write_started = True
+            test_flash.write_data_at(command.chunk_to_send)
+        else:
+            raise Exception(reason='Unexpected command: ' + str(monitor_comm.CommandFlashErase.COMMAND_ID) + ' at sequence: ' + str(test_step.step))
+        test_step.step += 1
+
+    test_firmware = PythonIntelHexFileParser()
+
+    content = bytes(range(0,256))
+    test_firmware.put_data_chunk(MCULocatedLogicalDataChunk(start_address=0x030000, content=content*16))
+    test_firmware.put_data_chunk(MCULocatedLogicalDataChunk(start_address=0x040000, content=content))
+    test_firmware.put_data_chunk(MCULocatedLogicalDataChunk(start_address=0x050000, content=content*32))
+
+    test_context = FlasherContext('',
+                                  progressbar_factory=SilentProgressBarFactory,
+                                  logger=MockLogger(DEBUG),
+                                  firmware_file_parser=test_firmware,
+                                  target_command_executor=fake_command_handler)
+    
+    # When a program operation is invoked
+
+    flashing_tools.st10_program_cmd(context=test_context, target_flash_blocks=test_flashblockscatalog, full_erase=False)
+
+    # Then, the flash should match what we have prepared in the firmware file image
+    assert test_flash.read_data_at(MCULogicalAddressRange(start_address=0x030000, end_address=0x030000+len(content)*16)) == content*16
+    assert test_flash.read_data_at(MCULogicalAddressRange(start_address=0x040000, end_address=0x040000+len(content))) == content
+    assert test_flash.read_data_at(MCULogicalAddressRange(start_address=0x050000, end_address=0x050000+len(content)*32)) == content*32
 
 def test_st10_verify_cmd_happy_pass():
     test_flash = EmulatedFlash(flash_size=0x060000)
@@ -484,13 +548,13 @@ def test_st10_dump_cmd_happy_pass():
     # Then, the firmware image should match what we have prepared in the emulated flash
     assert test_firmware.get_data_chunk_for_range(MCULogicalAddressRange(start_address=0x030000, end_address=0x030000+len(content)*16)).get_content() == content*16
     trailing_empty_bytes_in_segments = test_firmware.get_data_chunk_for_range(MCULogicalAddressRange(start_address=0x030000+len(content)*16, end_address=0x040000)).get_content()
-    assert trailing_empty_bytes_in_segments == b'\xff' * len(trailing_empty_bytes_in_segments)
+    assert_buffer_is_erased_flash(trailing_empty_bytes_in_segments)
     assert test_firmware.get_data_chunk_for_range(MCULogicalAddressRange(start_address=0x040000, end_address=0x040000+len(content))).get_content() == content
     trailing_empty_bytes_in_segments = test_firmware.get_data_chunk_for_range(MCULogicalAddressRange(start_address=0x040000+len(content), end_address=0x050000)).get_content()
-    assert trailing_empty_bytes_in_segments == b'\xff' * len(trailing_empty_bytes_in_segments)
+    assert_buffer_is_erased_flash(trailing_empty_bytes_in_segments)
     assert test_firmware.get_data_chunk_for_range(MCULogicalAddressRange(start_address=0x050000, end_address=0x050000+len(content)*32)).get_content() == content*32
     trailing_empty_bytes_in_segments = test_firmware.get_data_chunk_for_range(MCULogicalAddressRange(start_address=0x050000+len(content*32), end_address=0x060000)).get_content()
-    assert trailing_empty_bytes_in_segments == b'\xff' * len(trailing_empty_bytes_in_segments)
+    assert_buffer_is_erased_flash(trailing_empty_bytes_in_segments)
     assert test_firmware.get_data_chunk_for_range(MCULogicalAddressRange(start_address=test_flash.flash_size-1, end_address=test_flash.flash_size)).get_content() == b'\xa1'    # Check the last byte as well...
 
 def test_st10_chained_program_dump_cmd():

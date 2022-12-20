@@ -32,3 +32,17 @@ python3 "$FLASHER_TOPDIR"/pic18f_flasher.py dump /dev/ttyUSB0 /path/to/output/fi
 ```
 
 In order to program a firmware image, use `program` instead of `dump` in the command above.
+
+## Debugging the script
+
+In order to debug the multiflasher scripts, update the logger line in the corresponding python script.
+
+Configuration *without* debug:
+```
+logger = create_main_logger(name="flasher", log_level=INFO, also_log_libs=False)
+```
+
+Configuration *with* debug:
+```
+logger = create_main_logger(name="flasher", log_level=DEBUG, also_log_libs=True)
+```

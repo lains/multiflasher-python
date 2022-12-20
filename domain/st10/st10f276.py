@@ -45,8 +45,7 @@ class ST10F276FlashBlocksCatalog(FlashBlocksCatalog):
         self.flash_blocks.append(MCULogicalAddressRange(0x090000, 0x0a0000))  # B2F0
         self.flash_blocks.append(MCULogicalAddressRange(0x0a0000, 0x0b0000))  # B2F1
         self.flash_blocks.append(MCULogicalAddressRange(0x0b0000, 0x0c0000))  # B2F2
-        self.flash_blocks.append(MCULogicalAddressRange(0x0c0000, 0x0d0000))  # B3F0
-        self.flash_blocks.append(MCULogicalAddressRange(0x0d0000, 0x0e0000))  # B3F1
+        self.flash_blocks.append(MCULogicalAddressRange(0x0c0000, 0x0e0000))  # B3F0+B3F1
         self.B0F4toB3F1_flash_range = MCULogicalAddressRange(0x018000, 0x0e0000)
 
     def get_flash_addr_ranges(self) -> List[MCULogicalAddressRange]:

@@ -44,6 +44,11 @@ python3 "$FLASHER_TOPDIR"/st10_flasher.py dump /dev/ttyUSB1 /path/to/output/file
 
 In order to program a firmware image, use `program` instead of `dump` in the command above.
 
+## Debugging the script
+
+* In order to debug this script, use command-line option `-d` (before the 3 mandatory arguments)
+* To also log libraries calls, double the option `-d`.
+
 ## Using the library in interactive mode
 
 Because the execution of individual commands to the MCU is also available as Python methods, the ST10 Monitor can be manipulated via a Python interpreter.

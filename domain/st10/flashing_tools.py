@@ -54,7 +54,7 @@ class FlashBlocksCatalog(metaclass=abc.ABCMeta):
         """
         return self.flash_blocks[index]
 
-    def get_bloc_index_for_address(self, address: MCULogicalAddress) -> int:
+    def get_block_index_for_address(self, address: MCULogicalAddress) -> int:
         """@brief Map a given address into one of the MCU's flash memory blocks
         @param address The flash address to search
         @return The flash block index or None if this address could not be found
@@ -66,7 +66,24 @@ class FlashBlocksCatalog(metaclass=abc.ABCMeta):
             if flash_block is not None:
                 if address >= flash_block.start_address and address < flash_block.end_address:
                     return index
-        raise IndexError(f'Could not find bloc for address 0x{address:06x}')
+        raise IndexError(f'Could not find block for address 0x{address:06x}')
+    
+    def get_flash_block_indexes_for_range(self, range: MCULogicalAddressRange) -> List[int]:
+        """@brief Get a list of flash blocks covering a given address ranges
+        @param range The address range to cover
+        @return A list of flash block indexes
+        """
+        result_indexes = []
+        remaining_range = MCULogicalAddressRange(start_address=range.start_address, end_address=range.end_address)
+        while remaining_range.get_size() > 0:
+            start_byte_block_index = self.get_block_index_for_address(remaining_range.start_address)
+            result_indexes.append(start_byte_block_index)
+            start_byte_flash_block = self.get_flash_block_at_index(start_byte_block_index)
+            if start_byte_flash_block.end_address > remaining_range.end_address:
+                remaining_range.start_address = remaining_range.end_address # range is now empty
+            else:
+                remaining_range.start_address = start_byte_flash_block.end_address    # Remove the flash block from the provided range
+        return result_indexes
 
     @abc.abstractmethod
     def get_flash_addr_ranges(self) -> List[MCULogicalAddressRange]:
@@ -84,8 +101,8 @@ class FlashBlocksCatalog(metaclass=abc.ABCMeta):
             current_start_addr = MCULogicalAddress(address_segment.start_address)
             segment_fully_split = False
             while not segment_fully_split:
-                start_block_index = self.get_bloc_index_for_address(current_start_addr)
-                end_block_index = self.get_bloc_index_for_address(address_segment.end_address - 1)   # Only care about the included data bytes (thus -1)
+                start_block_index = self.get_block_index_for_address(current_start_addr)
+                end_block_index = self.get_block_index_for_address(address_segment.end_address - 1)   # Only care about the included data bytes (thus -1)
                 #logger.debug(f'(0x{current_start_addr:06x}, 0x{segment.end_address:06x}) spans blocs {start_block_index}-{end_block_index}')
                 if start_block_index != end_block_index: # The whole range of addresses for pending data does not fit in the same block, we have to yield an intermediate block that does not cover the whole segment end range yet
                     current_block_end_addr = self.flash_blocks[start_block_index].end_address   # Note that this address is excluded (it is after the last byte of the block)
@@ -131,7 +148,7 @@ def create_flash_writer(context: FlasherContext,
         @param allowed_retries The maximum number of retries (in case of failure, if 0 we will try only once)
         """
         context.logger.debug(f'Extracting data from input file at address 0x{address_range.start_address:06x} for {address_range.get_size()} (0x{address_range.get_size():04x}) bytes')
-        flash_block_index = target_flash_blocks.get_bloc_index_for_address(address=address_range.start_address)
+        flash_block_index = target_flash_blocks.get_block_index_for_address(address=address_range.start_address)
         flash_block_range: MCULogicalAddressRange = target_flash_blocks.get_flash_block_at_index(flash_block_index)
         if address_range.end_address > flash_block_range.end_address: # The requested range should not span more than one flash block
             raise NotImplementedError
@@ -329,16 +346,28 @@ def create_flash_reader(context: FlasherContext,
 
     return read_flash_range
 
-def st10_program_cmd(context: FlasherContext, target_flash_blocks: FlashBlocksCatalog) -> None:
+def st10_program_cmd(context: FlasherContext, target_flash_blocks: FlashBlocksCatalog, full_erase: bool = True) -> None:
     """@brief Program a firmware in a ST10 MCU
     @param context The context container for flashing operations
     @param target_flash_blocks A MCU-specific flash block catalog allowing to guess which flash sector to erase on write error
+    @param full_erase Do we erase the whole flash before programming? (if False, we will only erase the blocks that will get written)
     """
     firmware_segments_from_hex_file: List[MCULogicalAddressRange] = context.firmware_file_parser.get_segments()
 
     with context.create_progress_bar(name="Erasing flash ", min_value=context.firmware_file_parser.get_lowest_addr(), max_value=context.firmware_file_parser.get_highest_addr(), show_eta=False) as bar:
         bar.start() # We want to display an empty progress bar initially, as the flash erase is atomic and will reach 100% in one step
-        context.execute_on_target(comm.CommandFlashErase())
+        if full_erase:
+            context.execute_on_target(comm.CommandFlashErase())
+        else:
+            # Get the minimal list of flash blocks that need to be erased
+            flash_block_indexes_raw = list(flatten(list(map(target_flash_blocks.get_flash_block_indexes_for_range, context.firmware_file_parser.get_segments()))))
+            used_flash_block_indexes = sorted(list(set(flash_block_indexes_raw))) # Remove duplicates and sort to get a natural progression in growing addresses
+            context.logger.debug('Flash block indexes to erase: ' + str(used_flash_block_indexes))
+            for flash_block_index in used_flash_block_indexes:
+                context.logger.debug('Erasing block ' + str(flash_block_index))
+                flash_erase_mask = 1 << flash_block_index
+                context.execute_on_target(comm.CommandFlashErase(flash_mask=flash_erase_mask))
+                bar.update(target_flash_blocks.get_flash_block_at_index(flash_block_index).end_address)
         bar.finish()
 
     with context.create_progress_bar(name="Writing flash ", min_value=context.firmware_file_parser.get_lowest_addr(), max_value=context.firmware_file_parser.get_highest_addr(), show_eta=False) as bar:
