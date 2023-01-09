@@ -51,6 +51,23 @@ def get_16bit_arithmetic_checksum(buffer) -> int:
         checksum_result = (checksum_result + byte) & 0xffff
     return checksum_result
 
+def write_expect_echo(input_device, buffer) -> None:
+    """@brief Write a buffer to a serial device and expect each byte to be echoed back
+    @param input_device The device we write and read serial data from
+    @param buffer The bytes or bytearray buffer to write
+    @warning We will raise an exception if no byte is received or if the sent and received bytes mismatch
+
+    @note We allow the remote to be late at most one byte (to reduce round-trip time)
+    """
+    def chunker(seq, size):
+        return (seq[pos:pos + size] for pos in range(0, len(seq), size))
+
+    for byte_seq in chunker(buffer, 48):    # We send bursts of 48 bytes each time (the ST10 has large enough incoming and outgoing serial buffers to handle this)
+        input_device.write(byte_seq)
+        feedback_byte_seq = input_device.read(len(byte_seq))
+        if feedback_byte_seq != byte_seq:
+            raise RuntimeError(f'Unexpected feedback byte {feedback_byte_seq}, expected {byte_seq}')
+
 def expect_ack(input_device, timeout=None) -> None:
     """@brief Expect a serial ack on the input device
     @param input_device The device we read serial data from
@@ -619,7 +636,7 @@ class MonitorRemoteLauncher:
             raise RuntimeError('Unexpected startchipid assembly size: ' + str(len(startchipid_asm)))
         self._send_preloader(first_byte_addr=startchipid.minaddr(), length=len(startchipid_asm))
         logger.debug(f'Sending startchipid assembly code')
-        self.device.write(reversed(startchipid_asm))
+        write_expect_echo(self.device, startchipid_asm)
         expect_ack(self.device, timeout=0.5)
         return _recv_id_chip(timeout=0.1)
 
@@ -652,7 +669,7 @@ class MonitorRemoteLauncher:
             raise RuntimeError('Unexpected monitor assembly size: ' + str(len(monitor_asm)))
         self._send_preloader(first_byte_addr=monitor.minaddr(), length=len(monitor_asm))
         logger.debug(f'Sending monitor assembly code')
-        self.device.write(reversed(monitor_asm))
+        write_expect_echo(self.device, monitor_asm)
         expect_ack(self.device, timeout=2)
         reg = _recv_monitor_feedback(expected_id_chip=self.chip_id)
         if reg != 0xe3d0:
@@ -668,27 +685,24 @@ class MonitorRemoteLauncher:
         @param first_byte_addr The location (in the MCU address space) where the subsequent embedded code will be written
         @param length The size (in bytes) of the embedded code
         """
-        preloader_code = bytearray(b'\xe6\xf0' + \
-                                   b'\x01\xf6' + \
-                                   b'\xe6\xf1' + \
-                                   b'\x01\x00' + \
-                                   b'\x9a\xb7' + \
-                                   b'\xfe\x70' + \
-                                   b'\xf3\xf6' + \
-                                   b'\xb2\xfe' + \
-                                   b'\xd7\x00' + \
-                                   b'\x00\x00' + \
-                                   b'\x89\x60' + \
-                                   b'\x7e\xb7' + \
-                                   b'\x28\x11' + \
-                                   b'\x3d\xf6' + \
-                                   b'\xfa\x00' + \
-                                   b'\x00\xf6')
+        preloader_code = bytearray(  b'\xE6\xF0\x60\xFA' #    mov   r0, #0FA60h            ; Set r0 to point to the destination memory start address
+                                   + b'\xEC\xF0'         #    push  r0
+                                                         #LOOP:
+                                   + b'\x9A\xB7\xFE\x70' #    jnb   S0RIR, $               ; loop until a byte comes in
+                                   + b'\xA4\x00\xB2\xFE' #    movb  [r0], S0RBUF           ; write the byte in memory
+                                   + b'\x7E\xB7'         #    bclr  S0RIR                  ; clear the receive flag to get the next incoming byte
+                                   + b'\xB4\x00\xB0\xFE' #    movb  S0TBUF, [r0]           ; echo back the received byte to the serial port
+                                   + b'\xCC\x00'         #    nop                          ; give time for the previous byte to be sent out (we should use "jnb S0TIR, $" here but we have no room for 2 more bytes)
+                                   + b'\x7E\xB6'         #    bclr  S0TIR                  ; clear the transmit flag
+                                   + b'\x86\xF0\xFF\xFD' #    cmpi1 R0, #0FDFFh            ; check if we're done (value here should be the expected following binary size+0xFA60h-1). We used 0xFDFF in this example as a maximum value, because the code to be downloaded should not overwrite the Special Function Registers (SFR) area immediately following the internal RAM. The C166 SFRs start at FE00h.
+                                   + b'\x3D\xF4'         #    jmpr  cc_NE, LOOP            ; if not done, continue receiving the next byte
+                                   + b'\xCB\x00'         #    ret                          ; jump to 0xFA60 (see push above)
+                                  )
         length_le = struct.pack('<H', length)
         first_byte_addr_le = struct.pack('<H', first_byte_addr)
-        last_byte_addr_le = struct.pack('<H', first_byte_addr + length)
-        preloader_code[2:4] = last_byte_addr_le # Replace bytes at offset 2 and 3
-        preloader_code[6:8] = length_le # Replace bytes at offset 6 and 7
-        preloader_code[30:32] = first_byte_addr_le # Replace bytes at offset 30 and 31
+        last_byte_addr_le = struct.pack('<H', first_byte_addr + length - 1)
+        preloader_code[2:4] = first_byte_addr_le # Replace bytes at offset 2 and 3
+        preloader_code[26:28] = last_byte_addr_le # Replace bytes at offset 26 and 27
+        assert len(preloader_code) == 32    # ST10/C166 bootrom expects exactly 32 bytes
         logger.debug('Writing ' + str(len(preloader_code)) + f' bytes of assembly preloader code to receive and execute {length:d} bytes at address 0x{first_byte_addr:06x}')
         self.device.write(preloader_code)
