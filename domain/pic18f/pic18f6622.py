@@ -16,7 +16,7 @@ class PIC18F6622ConfigCatalog(PicBootConfigCatalog):
         usrrangehigh=0x20000F
         usrrange = MCULogicalAddressRange(start_address=usrrangelow, end_address=usrrangehigh+1)
         cfgrangelow=0x300000
-        cfgrangehigh=0x30000F
+        cfgrangehigh=0x30000D
         ''' Config registers seem to be mapped as follows (they are part of the input HEX image but won't be written):
         CONFIG1L 300000h
         CONFIG1H 300001h
