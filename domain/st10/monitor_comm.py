@@ -605,7 +605,7 @@ class MonitorRemoteLauncher:
         @note If no exception is raised, then the S10 is in bootstrap mode and provided the expected ST10 echo type
         """
         logger.info('Probing remote for bootstrap mode')
-        self.device.write(b'\x00')     # write a string
+        self.device.write(b'\x00')     # Probe the target, allowing it to guess the baudrate
         if timeout is not None:
             self.device.timeout = timeout
         ackByte = self.device.read(1)
