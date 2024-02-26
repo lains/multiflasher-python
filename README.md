@@ -50,3 +50,10 @@ Instructions are available in [the dedicated readme](./README_st10.md).
 ## PIC18F flasher tool
 
 Instructions are available in [the dedicated readme](./README_pic18f.md).
+
+## STM32...
+
+For STM32, there are plenty of tools available, including the STM32CubeProgrammer from ST.
+
+If you're looking for a tool with accessible full source code, you can also have a look here:
+https://sourceforge.net/p/stm32flash/wiki/Home/
