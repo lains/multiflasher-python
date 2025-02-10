@@ -164,9 +164,9 @@ class CommandWriteProgramMemory(PicbootCommand):
 
     def __init__(self, chunk_to_send: MCULocatedLogicalDataChunk, **kwargs):
         """@brief Constructor
-        @param chunk_to_send The chunk of binary data to send to the target
+        @param chunk_to_send The chunk of binary data to send to the target, its length must be a multiple of 8 bytes (= size of a flash block) and at most 128 flash blocks
         """
-        assert chunk_to_send.size >= 0x00 and chunk_to_send.size <= 0xff
+        assert chunk_to_send.size >= 0x00 and chunk_to_send.size <= 128 * 8
         assert chunk_to_send.size % 8 == 0  # We only take multiples of the write block size as chunks
         logger.debug(f'Will send data buffer of {chunk_to_send.size} bytes')
         self.chunk_to_send = chunk_to_send
@@ -396,6 +396,7 @@ class PicbootProtocol:
         while not end_of_packet:
             self.device.timeout = PicbootProtocol.READ_TIMEOUT
             input = self.device.read(1)
+            #logger.warning('Incoming: ' + str(input))
             if len(input) < 1:
                 current_state = []
                 if in_escape:
@@ -466,6 +467,7 @@ class PicbootProtocol:
         attempt_number = 0
         while attempt_number <= allowed_retries:
             logger.info(('Sending' if attempt_number == 0 else 'Re-sending') + ' command: ' + str(command))
+            #logger.warning('Bytes sent to serial port: ' + str(encapsulated_command_buffer))
             reply_bytes: bytearray = b''
             try:
                 self.device.write(encapsulated_command_buffer)   # Send command detail to remote
@@ -548,7 +550,7 @@ class BootloaderRemoteLauncher:
               take all the necessary steps to make it start the embedded bootloader
         """
         with PicbootProtocolSession(device=self.device) as target:
-            for _ in itertools.repeat(None, 6):
+            for _ in itertools.repeat(None, 10):
                 target.execute(CommandEnterBootloader())
             (version_major, version_minor) = target.execute(CommandReadBootloaderVersion())
             logger.info('Communicating with PICBOOT v' + str(version_major) + '.' + str(version_minor))

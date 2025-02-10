@@ -182,7 +182,7 @@ def read_firmware_range(context: FlasherContext, requested_range: MCULogicalAddr
         data = context.execute_on_target(comm.CommandReadProgramMemory(chunk_start_address=dumped_start_address, chunk_size=16))
         assert len(data) == 16
         if address_range.get_size() != 16:
-            context.logger.debug(f"Read 16 byets, but only {address_range.get_size()} are required, truncating")
+            context.logger.debug(f"Read 16 bytes, but only {address_range.get_size()} are required, truncating")
         data = data [:address_range.get_size()] # Get rid of the extra bytes we have just read if needed
         if data == b'\xff' * address_range.get_size():    # Block contains only erased flash content
             pass    # Only empty flash, nothing to dump
