@@ -62,7 +62,7 @@ def write_expect_echo(input_device, buffer) -> None:
     def chunker(seq, size):
         return (seq[pos:pos + size] for pos in range(0, len(seq), size))
 
-    for byte_seq in chunker(buffer, 48):    # We send bursts of 48 bytes each time (the ST10 has large enough incoming and outgoing serial buffers to handle this)
+    for byte_seq in chunker(buffer, 32):    # We send bursts of 32 bytes each time (the ST10 has large enough incoming and outgoing serial buffers to handle this)
         input_device.write(byte_seq)
         feedback_byte_seq = input_device.read(len(byte_seq))
         if feedback_byte_seq != byte_seq:
