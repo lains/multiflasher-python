@@ -294,6 +294,32 @@ class CommandExitBootloader(PicbootCommand):
     def parse_reply(self, reply_payload):
         return
 
+class CommandReadBootloaderVersion(PicbootCommand):
+    """@brief Class for encoding/decoding a command to get the bootloader firmware version"""
+    COMMAND_ID = 0x00
+    COMMAND_NAME = 'RD_VER'
+
+    def __init__(self, **kwargs):
+        """@brief Constructor
+        """
+        super().__init__(command_id = self.COMMAND_ID, **kwargs)
+
+    def get_arguments_payload(self) -> bytearray:
+            return b'\x02'
+
+    def get_reply_timeout(self) -> int:
+        return 0.001   # allow 1ms for command to proceed
+
+    def get_expected_reply_sz(self) -> int:
+        return 4
+
+    def parse_reply(self, reply_payload):
+        if reply_payload[0] != self.COMMAND_ID:
+            raise RuntimeError(f'Wrong reply. Expected first byte equal to command ID {self.COMMAND_ID:02x}, got frame ' + ' '.join('{:02x}'.format(b) for b in reply_payload))
+        if reply_payload[1] != 0x02:
+            raise RuntimeError(f'Wrong reply. Expected second byte equal 0x02, got frame ' + ' '.join('{:02x}'.format(b) for b in reply_payload))
+        (minor_version, major_version) = struct.unpack('BB', reply_payload[2:4])
+        return (major_version, minor_version)
 
 class PicbootProtocol:
     """@brief Class representing the communication protocol with the remote embedded monitor software
@@ -524,6 +550,8 @@ class BootloaderRemoteLauncher:
         with PicbootProtocolSession(device=self.device) as target:
             for _ in itertools.repeat(None, 6):
                 target.execute(CommandEnterBootloader())
+            (version_major, version_minor) = target.execute(CommandReadBootloaderVersion())
+            logger.info('Communicating with PICBOOT v' + str(version_major) + '.' + str(version_minor))
             (device_id, device_rev) = target.execute(CommandReadDeviceID())
             if not self.validate_device_id(device_id):
                 raise RuntimeError("CHIP ID 0x{device_id:x}} is invalid")
